@@ -1,0 +1,5 @@
+.env
+__*
+.idea
+go.sum
+/bin/camscan*
