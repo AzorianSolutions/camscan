@@ -6,25 +6,25 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
-
-const DbConnectReattemptDelay = 5
-const DbConnectReattemptThreshold = 10
 
 var configs = make(map[string]types.DbConfig)
 var connections = make(map[string]*sql.DB)
 var db *sql.DB = nil
 var dbConnectionString string
 
-func CreateConfig(host string, port string, user string, password string, name string) types.DbConfig {
+func CreateConfig(host string, port string, user string, password string, name string, retries int, delay int) types.DbConfig {
 	var config = GetDefaultConfig()
 	config.Host = host
 	config.Port = port
 	config.User = user
 	config.Password = password
 	config.Name = name
+	config.ConnectRetries = retries
+	config.ConnectRetryDelay = delay
 	return config
 }
 
@@ -35,6 +35,8 @@ func CreateConfigFromEnvironment() types.DbConfig {
 	var user = strings.Trim(os.Getenv("CAMS_DB_USER"), " ")
 	var password = strings.Trim(os.Getenv("CAMS_DB_PASSWORD"), " ")
 	var name = strings.Trim(os.Getenv("CAMS_DB_NAME"), " ")
+	var retries, _ = strconv.Atoi(strings.Trim(os.Getenv("CAMS_DB_CONNECT_RETRIEES"), " "))
+	var delay, _ = strconv.Atoi(strings.Trim(os.Getenv("CAMS_DB_CONNECT_RETRY_DELAY"), " "))
 
 	if len(host) == 0 {
 		host = defaultConfig.Host
@@ -56,7 +58,7 @@ func CreateConfigFromEnvironment() types.DbConfig {
 		name = defaultConfig.Name
 	}
 
-	return CreateConfig(host, port, user, password, name)
+	return CreateConfig(host, port, user, password, name, retries, delay)
 }
 
 func GetDefaultConfig() types.DbConfig {
@@ -117,14 +119,14 @@ func OpenConnection(name string, config types.DbConfig) (bool, *sql.DB) {
 	for opened == false {
 		if attempts > 0 {
 			logging.Debug("Failed to connect to database server. Waiting %v seconds to try again...",
-				DbConnectReattemptDelay)
-			time.Sleep(time.Second * DbConnectReattemptDelay)
+				config.ConnectRetryDelay)
+			time.Sleep(time.Second * time.Duration(config.ConnectRetryDelay))
 		}
 
 		attempts++
 		opened, db = CreateConnection(name, config)
 
-		if opened == false && attempts >= DbConnectReattemptThreshold {
+		if opened == false && attempts >= config.ConnectRetries {
 			logging.Debug("The threshold for database connection attempts of %v has been reached.")
 			return false, db
 		}

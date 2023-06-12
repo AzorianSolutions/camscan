@@ -12,9 +12,11 @@ type AppConfig struct {
 }
 
 type DbConfig struct {
-	Host     string
-	Name     string
-	Password string
-	Port     string
-	User     string
+	Host              string
+	Name              string
+	Password          string
+	Port              string
+	User              string
+	ConnectRetries    int
+	ConnectRetryDelay int
 }
