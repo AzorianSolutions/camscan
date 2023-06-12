@@ -16,6 +16,12 @@ const MacAddressOid = "1.3.6.1.4.1.161.19.3.3.1.3.0"
 const SNMPSiteNameOid = "1.3.6.1.2.1.1.5.0"
 const SNMPSiteLocationOid = "1.3.6.1.2.1.1.6.0"
 const SNMPSiteContactOid = "1.3.6.1.2.1.1.4.0"
+const IfInErrorsOid = "1.3.6.1.2.1.2.2.1.14.1"
+const IfOutErrorsOid = "1.3.6.1.2.1.2.2.1.20.1"
+const FECCRCErrorOid = "1.3.6.1.4.1.161.19.3.3.1.223.0"
+const FECRxFifoNoBufOid = "1.3.6.1.4.1.161.19.3.3.1.224.0"
+const FECCarrierSenseLostOid = "1.3.6.1.4.1.161.19.3.3.1.229.0"
+const FECNoCarrierOid = "1.3.6.1.4.1.161.19.3.3.1.230.0"
 
 func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDescriptor) (interface{}, error) {
 	var record = descriptor.Metadata["record"].(device.SubscriberModule)
@@ -50,7 +56,8 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 		}
 	}(snmp.Conn)
 
-	oids := []string{FirmwareModeOid, MacAddressOid, SNMPSiteNameOid, SNMPSiteLocationOid, SNMPSiteContactOid}
+	oids := []string{FirmwareModeOid, MacAddressOid, SNMPSiteNameOid, SNMPSiteLocationOid, SNMPSiteContactOid,
+		IfInErrorsOid, IfOutErrorsOid, FECCRCErrorOid, FECRxFifoNoBufOid, FECCarrierSenseLostOid, FECNoCarrierOid}
 
 	logging.Trace1("Querying SNMP service for subscriber module; ip: %s;", record.IPv4Address)
 
@@ -96,6 +103,44 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 			// SNMP Site Contact
 			if oid == SNMPSiteContactOid {
 				logging.Debug("Loaded site contact; ip: %s; value: %s;",
+					record.IPv4Address, value)
+			}
+		} else if variable.Type == gosnmp.Counter32 || variable.Type == gosnmp.Counter64 {
+			value := variable.Value
+
+			// Ethernet Interface In Errors
+			if oid == IfInErrorsOid {
+				logging.Debug("Loaded ethernet interface in errors; ip: %s; value: %v;",
+					record.IPv4Address, value)
+			}
+
+			// Ethernet Interface Out Errors
+			if oid == IfOutErrorsOid {
+				logging.Debug("Loaded ethernet interface out errors; ip: %s; value: %v;",
+					record.IPv4Address, value)
+			}
+
+			// FEC CRC Errors
+			if oid == FECCRCErrorOid {
+				logging.Debug("Loaded FEC CRC errors; ip: %s; value: %v;",
+					record.IPv4Address, value)
+			}
+
+			// FEC RX Fifo No Buf Errors
+			if oid == FECRxFifoNoBufOid {
+				logging.Debug("Loaded FEC Receive Fifo No Buf errors; ip: %s; value: %v;",
+					record.IPv4Address, value)
+			}
+
+			// FEC Carrier Sense Lost Errors
+			if oid == FECCarrierSenseLostOid {
+				logging.Debug("Loaded FEC carrier sense lost errors; ip: %s; value: %v;",
+					record.IPv4Address, value)
+			}
+
+			// FEC No Carrier Errors
+			if oid == FECNoCarrierOid {
+				logging.Debug("Loaded FEC no carrier errors; ip: %s; value: %v;",
 					record.IPv4Address, value)
 			}
 		} else if variable.Type == gosnmp.Null {
