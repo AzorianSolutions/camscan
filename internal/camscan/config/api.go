@@ -18,8 +18,10 @@ func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bo
 	debugEnv := strings.Trim(os.Getenv("CAMS_DEBUG"), " ")
 	dryRunEnv := strings.Trim(os.Getenv("CAMS_DRY_RUN"), " ")
 	logLevel, _ := strconv.Atoi(strings.Trim(os.Getenv("CAMS_LOG_LEVEL"), " "))
-	snmpTimeoutCpe, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_CPE"), " "), 32)
+	snmpApCommunity := strings.Trim(os.Getenv("CAMS_SNMP_AP_COMMUNITY"), " ")
+	snmpSmCommunity := strings.Trim(os.Getenv("CAMS_SNMP_SM_COMMUNITY"), " ")
 	snmpTimeoutAp, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_AP"), " "), 32)
+	snmpTimeoutSm, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_SM"), " "), 32)
 	workersEnv, _ := strconv.Atoi(strings.Trim(os.Getenv("CAMS_WORKERS"), " "))
 
 	// Enforce minimum worker policy as well as assign default values
@@ -43,18 +45,18 @@ func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bo
 		logLevel = logging.DefaultLogLevel
 	}
 
-	if snmpTimeoutCpe == 0 {
-		snmpTimeoutCpe = DefaultSnmpTimeout
-	} else if snmpTimeoutCpe < MinSnmpTimeout {
-		logging.Debug("Changing value for the 'SNMP_TIMEOUT_CPE' setting from '%v' to '%v'", snmpTimeoutCpe, MinSnmpTimeout)
-		snmpTimeoutCpe = MinSnmpTimeout
-	}
-
 	if snmpTimeoutAp == 0 {
 		snmpTimeoutAp = DefaultSnmpTimeout
 	} else if snmpTimeoutAp < MinSnmpTimeout {
 		logging.Debug("Changing value for the 'SNMP_TIMEOUT_AP' setting from '%v' to '%v'", snmpTimeoutAp, MinSnmpTimeout)
 		snmpTimeoutAp = MinSnmpTimeout
+	}
+
+	if snmpTimeoutSm == 0 {
+		snmpTimeoutSm = DefaultSnmpTimeout
+	} else if snmpTimeoutSm < MinSnmpTimeout {
+		logging.Debug("Changing value for the 'SNMP_TIMEOUT_SM' setting from '%v' to '%v'", snmpTimeoutSm, MinSnmpTimeout)
+		snmpTimeoutSm = MinSnmpTimeout
 	}
 
 	if workersEnv > 0 {
@@ -67,14 +69,16 @@ func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bo
 	}
 
 	config := types.AppConfig{
-		Community:      community,
-		DbConfig:       dbConfig,
-		Debug:          debug,
-		DryRun:         dryRun,
-		LogLevel:       logLevel,
-		SnmpTimeoutCpe: snmpTimeoutCpe,
-		SnmpTimeoutAp:  snmpTimeoutAp,
-		Workers:        workers,
+		Community:       community,
+		DbConfig:        dbConfig,
+		Debug:           debug,
+		DryRun:          dryRun,
+		LogLevel:        logLevel,
+		SnmpApCommunity: snmpApCommunity,
+		SnmpSmCommunity: snmpSmCommunity,
+		SnmpTimeoutSm:   snmpTimeoutSm,
+		SnmpTimeoutAp:   snmpTimeoutAp,
+		Workers:         workers,
 	}
 
 	return config

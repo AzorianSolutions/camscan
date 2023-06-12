@@ -2,6 +2,8 @@ package tasks
 
 import (
 	"as/camscan/internal/camscan/database"
+	dbAp "as/camscan/internal/camscan/database/device/ap"
+	dbSm "as/camscan/internal/camscan/database/device/sm"
 	"as/camscan/internal/camscan/device/ap"
 	"as/camscan/internal/camscan/device/sm"
 	"as/camscan/internal/camscan/logging"
@@ -18,8 +20,8 @@ var appConfig types.AppConfig
 var db *sql.DB
 
 // Setup device maps
-var apMap map[string]device.AccessPoint
-var smMap map[string]device.SubscriberModule
+var accessPoints []device.AccessPoint
+var subscriberModules []device.SubscriberModule
 
 // Define worker pool variables
 var jobs = make([]workers.Job, 0)
@@ -57,7 +59,11 @@ func SetupJobs() {
 	syncDatabase(db, appConfig)
 
 	// Load jobs queue with access points
-	for _, el := range apMap {
+	for _, el := range accessPoints {
+		if el.Status < 1 {
+			continue
+		}
+
 		jobId := len(jobs) + 1
 		metadata := make(map[string]interface{})
 		metadata["record"] = el
@@ -81,7 +87,11 @@ func SetupJobs() {
 	}
 
 	// Load jobs queue with subscriber modules
-	for _, el := range smMap {
+	for _, el := range subscriberModules {
+		if el.Status < 1 {
+			continue
+		}
+
 		jobId := len(jobs) + 1
 		metadata := make(map[string]interface{})
 		metadata["record"] = el
@@ -145,17 +155,27 @@ func MonitorJobs() {
 }
 
 func syncDatabase(db *sql.DB, appConfig types.AppConfig) bool {
-	var opened = false
+	var success = false
 
 	// Open a fresh database connection to ensure a smooth execution
-	opened, db = database.CreateConnection("main", appConfig.DbConfig)
+	success, db = database.CreateConnection("main", appConfig.DbConfig)
 
 	// Handle any exceptions that may have occurred when attempting to open the database connection
-	if opened != true {
+	if success != true {
 		return false
 	}
 
-	// Nothing to do yet
+	success, accessPoints = dbAp.GetRecords(db)
+
+	if success != true {
+		return false
+	}
+
+	success, subscriberModules = dbSm.GetRecords(db)
+
+	if success != true {
+		return false
+	}
 
 	return true
 }

@@ -1,14 +1,16 @@
 package types
 
 type AppConfig struct {
-	Community      string
-	DbConfig       DbConfig
-	Debug          bool
-	DryRun         bool
-	LogLevel       int
-	SnmpTimeoutCpe float64
-	SnmpTimeoutAp  float64
-	Workers        int
+	Community       string
+	DbConfig        DbConfig
+	Debug           bool
+	DryRun          bool
+	LogLevel        int
+	SnmpApCommunity string
+	SnmpSmCommunity string
+	SnmpTimeoutAp   float64
+	SnmpTimeoutSm   float64
+	Workers         int
 }
 
 type DbConfig struct {
