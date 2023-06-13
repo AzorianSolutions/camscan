@@ -61,6 +61,8 @@ func SetupJobs() {
 	// Synchronize changes from the database
 	syncDatabase(db, appConfig)
 
+	// dbSubnet.PopulateSubnets(db)
+
 	// Build jobs queue for device ICMP checks
 	jobId := 1
 	// _, jobId, jobs = networkApi.BuildDeviceCheckJobs(db, appConfig, 1)

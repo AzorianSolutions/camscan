@@ -94,7 +94,32 @@ func QueryHost(appConfig types.AppConfig, host string, oid string) (bool, interf
 	snmpResult, snmpError := snmp.Get(oids)
 
 	if snmpError != nil {
-		logging.Warning("Failed to query SNMP service for device; ip: %s; error: %s;", host, snmpError.Error())
+		logging.Trace1("Failed to query SNMP service for device (sm); ip: %s; error: %s;", host, snmpError.Error())
+
+		timeout = time.Duration(1000000000 * appConfig.SnmpTimeoutAp)
+
+		snmp = &gosnmp.GoSNMP{
+			Target:    host,
+			Port:      161,
+			Community: appConfig.SnmpApCommunity,
+			Version:   gosnmp.Version2c,
+			Timeout:   timeout,
+		}
+
+		snmpError = snmp.Connect()
+
+		if snmpError != nil {
+			logging.Warning("Failed to open SNMP connection for device; ip: %s;", host)
+			return false, nil
+		}
+
+		logging.Trace1("Querying SNMP service for device; ip: %s;", host)
+
+		snmpResult, snmpError = snmp.Get(oids)
+	}
+
+	if snmpError != nil {
+		logging.Trace1("Failed to query SNMP service for device (ap); ip: %s; error: %s;", host, snmpError.Error())
 		return false, nil
 	}
 
@@ -108,7 +133,7 @@ func QueryHost(appConfig types.AppConfig, host string, oid string) (bool, interf
 
 			// Firmware Version & Mode
 			if resultOid == FirmwareModeOid {
-				logging.Trace1("Loaded firmware mode; ip: %s; value: %s;",
+				logging.Trace2("Loaded firmware mode; ip: %s; value: %s;",
 					host, value)
 				return true, value
 			}
@@ -156,7 +181,7 @@ func CheckDevice(ctx context.Context, args interface{}, descriptor workers.JobDe
 	}
 
 	if mode == "ap" {
-		record := device.AccessPoint{
+		deviceRecord := device.AccessPoint{
 			NetworkId:      record.NetworkId,
 			MacAddress:     "000000000000",
 			IPv4Address:    record.IPv4Address,
@@ -164,11 +189,11 @@ func CheckDevice(ctx context.Context, args interface{}, descriptor workers.JobDe
 			Status:         2,
 		}
 
-		dbAp.UpsertRecord(descriptor.Db, record)
+		dbAp.UpsertRecord(descriptor.Db, deviceRecord)
 	}
 
 	if mode == "sm" {
-		record := device.SubscriberModule{
+		deviceRecord := device.SubscriberModule{
 			NetworkId:      record.NetworkId,
 			MacAddress:     "000000000000",
 			IPv4Address:    record.IPv4Address,
@@ -176,7 +201,7 @@ func CheckDevice(ctx context.Context, args interface{}, descriptor workers.JobDe
 			Status:         2,
 		}
 
-		dbSm.UpsertRecord(descriptor.Db, record)
+		dbSm.UpsertRecord(descriptor.Db, deviceRecord)
 	}
 
 	return returnVal, nil

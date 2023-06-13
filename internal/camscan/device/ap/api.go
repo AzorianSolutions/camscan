@@ -71,31 +71,31 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 
 			// Firmware Version & Mode
 			if oid == FirmwareModeOid {
-				logging.Debug("Loaded firmware mode; ip: %s; value: %s;",
+				logging.Trace2("Loaded firmware mode; ip: %s; value: %s;",
 					record.IPv4Address, value)
 			}
 
 			// Primary MAC Address
 			if oid == MacAddressOid {
-				logging.Debug("Loaded primary MAC address; ip: %s; value: %s;",
+				logging.Trace2("Loaded primary MAC address; ip: %s; value: %s;",
 					record.IPv4Address, value)
 			}
 
 			// SNMP Site Name
 			if oid == SNMPSiteNameOid {
-				logging.Debug("Loaded site name; ip: %s; value: %s;",
+				logging.Trace2("Loaded site name; ip: %s; value: %s;",
 					record.IPv4Address, value)
 			}
 
 			// SNMP Site Location
 			if oid == SNMPSiteLocationOid {
-				logging.Debug("Loaded site location; ip: %s; value: %s;",
+				logging.Trace2("Loaded site location; ip: %s; value: %s;",
 					record.IPv4Address, value)
 			}
 
 			// SNMP Site Contact
 			if oid == SNMPSiteContactOid {
-				logging.Debug("Loaded site contact; ip: %s; value: %s;",
+				logging.Trace2("Loaded site contact; ip: %s; value: %s;",
 					record.IPv4Address, value)
 			}
 		} else if variable.Type == gosnmp.Null {

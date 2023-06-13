@@ -4,6 +4,7 @@ import (
 	"as/camscan/internal/camscan/logging"
 	"as/camscan/internal/camscan/types/network"
 	"database/sql"
+	"fmt"
 	"github.com/praserx/ipconv"
 	"net"
 	"strconv"
@@ -11,8 +12,27 @@ import (
 
 func PopulateSubnets(db *sql.DB) {
 	for i := 1; i <= 52; i++ {
+		mask := 24
+		ipv4 := fmt.Sprintf("10.%v.2.0", i)
+		ip, _, _ := ipconv.ParseIP(ipv4)
+		ipv4Int, _ := ipconv.IPv4ToInt(ip)
+		cidr := fmt.Sprintf("%s/%v", ipv4, mask)
+
+		record := network.Subnet{
+			NetworkId:             1,
+			Cidr:                  cidr,
+			IPv4NetworkAddress:    ipv4,
+			IPv4NetworkAddressInt: ipv4Int,
+			IPv4NetworkMask:       mask,
+			Status:                1,
+		}
+
+		UpsertRecord(db, record)
+	}
+
+	for i := 1; i <= 52; i++ {
 		mask := 22
-		ipv4 := "10." + strconv.Itoa(i) + ".148.0"
+		ipv4 := fmt.Sprintf("10.%v.148.0", i)
 		var ipv4Int uint32 = 0
 
 		ip, _, err := net.ParseCIDR(ipv4 + "/" + strconv.Itoa(mask))
