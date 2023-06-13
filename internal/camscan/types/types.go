@@ -5,6 +5,8 @@ type AppConfig struct {
 	DbConfig        DbConfig
 	Debug           bool
 	DryRun          bool
+	ICMPRetries     int
+	ICMPTimeout     float64
 	LogLevel        int
 	SnmpApCommunity string
 	SnmpSmCommunity string

@@ -8,6 +8,7 @@ import (
 	"as/camscan/internal/camscan/device/ap"
 	"as/camscan/internal/camscan/device/sm"
 	"as/camscan/internal/camscan/logging"
+	networkApi "as/camscan/internal/camscan/network"
 	"as/camscan/internal/camscan/types"
 	"as/camscan/internal/camscan/types/device"
 	"as/camscan/internal/camscan/types/network"
@@ -15,9 +16,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/apparentlymart/go-cidr/cidr"
-	"github.com/praserx/ipconv"
-	"net"
 	"strconv"
 )
 
@@ -64,56 +62,9 @@ func SetupJobs() {
 	// Synchronize changes from the database
 	syncDatabase(db, appConfig)
 
+	// Build jobs queue for device ICMP checks
 	jobId := 1
-
-	// Load jobs queue with subscriber modules based on network subnets
-	for _, el := range subnets {
-		if el.Status < 1 {
-			continue
-		}
-
-		_, networkIpv4, err := net.ParseCIDR(el.IPv4NetworkAddress + "/" + strconv.Itoa(el.IPv4NetworkMask))
-
-		if err == nil {
-			ipv4Start, ipv4End := cidr.AddressRange(networkIpv4)
-			ipv4StartInt, _ := ipconv.IPv4ToInt(ipv4Start)
-			ipv4EndInt, _ := ipconv.IPv4ToInt(ipv4End)
-
-			for i := ipv4StartInt; i <= ipv4EndInt; i++ {
-				ipv4Address := ipconv.IntToIPv4(i).String()
-
-				subscriberModule := device.SubscriberModule{
-					NetworkId:      el.NetworkId,
-					MacAddress:     "000000000000",
-					IPv4Address:    ipv4Address,
-					IPv4AddressInt: i,
-					Status:         1,
-				}
-
-				metadata := make(map[string]interface{})
-				metadata["record"] = subscriberModule
-
-				job := workers.Job{
-					Descriptor: workers.JobDescriptor{
-						ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
-						JType:     "sm",
-						AppConfig: appConfig,
-						Metadata:  metadata,
-						Db:        db,
-					},
-					ExecFn: sm.ScanDevice,
-					Args:   jobId,
-				}
-
-				logging.Debug("Queueing job for sm (%v); nid: %v; mac: %s; ip: %s; status: %v;",
-					job.Descriptor.ID, subscriberModule.NetworkId, subscriberModule.MacAddress,
-					subscriberModule.IPv4Address, el.Status)
-
-				jobs = append(jobs, job)
-				jobId++
-			}
-		}
-	}
+	_, jobId, jobs = networkApi.BuildDeviceCheckJobs(db, appConfig, 1)
 
 	// Load jobs queue with access points
 	for _, el := range accessPoints {
@@ -121,7 +72,6 @@ func SetupJobs() {
 			continue
 		}
 
-		jobId := len(jobs) + 1
 		metadata := make(map[string]interface{})
 		metadata["record"] = el
 
@@ -150,7 +100,6 @@ func SetupJobs() {
 			continue
 		}
 
-		jobId := len(jobs) + 1
 		metadata := make(map[string]interface{})
 		metadata["record"] = el
 

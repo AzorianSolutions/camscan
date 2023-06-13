@@ -17,11 +17,13 @@ func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bo
 	community := strings.Trim(os.Getenv("CAMS_COMMUNITY"), " ")
 	debugEnv := strings.Trim(os.Getenv("CAMS_DEBUG"), " ")
 	dryRunEnv := strings.Trim(os.Getenv("CAMS_DRY_RUN"), " ")
+	icmpRetries, _ := strconv.Atoi(strings.Trim(os.Getenv("CAMS_ICMP_RETRIES"), " "))
+	icmpTimeout, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_ICMP_TIMEOUT"), " "), 64)
 	logLevel, _ := strconv.Atoi(strings.Trim(os.Getenv("CAMS_LOG_LEVEL"), " "))
 	snmpApCommunity := strings.Trim(os.Getenv("CAMS_SNMP_AP_COMMUNITY"), " ")
 	snmpSmCommunity := strings.Trim(os.Getenv("CAMS_SNMP_SM_COMMUNITY"), " ")
-	snmpTimeoutAp, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_AP"), " "), 32)
-	snmpTimeoutSm, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_SM"), " "), 32)
+	snmpTimeoutAp, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_AP"), " "), 64)
+	snmpTimeoutSm, _ := strconv.ParseFloat(strings.Trim(os.Getenv("CAMS_SNMP_TIMEOUT_SM"), " "), 64)
 	workersEnv, _ := strconv.Atoi(strings.Trim(os.Getenv("CAMS_WORKERS"), " "))
 
 	// Enforce minimum worker policy as well as assign default values
@@ -73,6 +75,8 @@ func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bo
 		DbConfig:        dbConfig,
 		Debug:           debug,
 		DryRun:          dryRun,
+		ICMPRetries:     icmpRetries,
+		ICMPTimeout:     icmpTimeout,
 		LogLevel:        logLevel,
 		SnmpApCommunity: snmpApCommunity,
 		SnmpSmCommunity: snmpSmCommunity,

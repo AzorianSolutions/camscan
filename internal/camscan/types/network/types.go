@@ -16,3 +16,12 @@ type Subnet struct {
 	IPv4NetworkMask       int
 	Status                int
 }
+
+type Device struct {
+	Id             int
+	NetworkId      int
+	SubnetId       int
+	IPv4Address    string
+	IPv4AddressInt uint32
+	Status         int
+}
