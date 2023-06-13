@@ -12,7 +12,7 @@ type Subnet struct {
 	NetworkId             int
 	Cidr                  string
 	IPv4NetworkAddress    string
-	IPv4NetworkAddressInt int
+	IPv4NetworkAddressInt uint32
 	IPv4NetworkMask       int
 	Status                int
 }

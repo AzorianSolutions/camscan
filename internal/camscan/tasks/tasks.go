@@ -4,15 +4,20 @@ import (
 	"as/camscan/internal/camscan/database"
 	dbAp "as/camscan/internal/camscan/database/device/ap"
 	dbSm "as/camscan/internal/camscan/database/device/sm"
+	dbSubnet "as/camscan/internal/camscan/database/network/subnet"
 	"as/camscan/internal/camscan/device/ap"
 	"as/camscan/internal/camscan/device/sm"
 	"as/camscan/internal/camscan/logging"
 	"as/camscan/internal/camscan/types"
 	"as/camscan/internal/camscan/types/device"
+	"as/camscan/internal/camscan/types/network"
 	"as/camscan/internal/camscan/workers"
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/apparentlymart/go-cidr/cidr"
+	"github.com/praserx/ipconv"
+	"net"
 	"strconv"
 )
 
@@ -22,6 +27,7 @@ var db *sql.DB
 // Setup device maps
 var accessPoints []device.AccessPoint
 var subscriberModules []device.SubscriberModule
+var subnets []network.Subnet
 
 // Define worker pool variables
 var jobs = make([]workers.Job, 0)
@@ -113,6 +119,56 @@ func SetupJobs() {
 
 		jobs = append(jobs, job)
 	}
+
+	// Load jobs queue with subscriber modules based on network subnets
+	for _, el := range subnets {
+		if el.Status < 1 {
+			continue
+		}
+
+		jobId := len(jobs) + 1
+
+		_, networkIpv4, err := net.ParseCIDR(el.IPv4NetworkAddress + "/" + strconv.Itoa(el.IPv4NetworkMask))
+
+		if err == nil {
+			ipv4Start, ipv4End := cidr.AddressRange(networkIpv4)
+			ipv4StartInt, _ := ipconv.IPv4ToInt(ipv4Start)
+			ipv4EndInt, _ := ipconv.IPv4ToInt(ipv4End)
+
+			for i := ipv4StartInt; i <= ipv4EndInt; i++ {
+				ipv4Address := ipconv.IntToIPv4(i).String()
+
+				subscriberModule := device.SubscriberModule{
+					NetworkId:      el.NetworkId,
+					MacAddress:     "000000000000",
+					IPv4Address:    ipv4Address,
+					IPv4AddressInt: i,
+					Status:         1,
+				}
+
+				metadata := make(map[string]interface{})
+				metadata["record"] = subscriberModule
+
+				job := workers.Job{
+					Descriptor: workers.JobDescriptor{
+						ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
+						JType:     "sm",
+						AppConfig: appConfig,
+						Metadata:  metadata,
+						Db:        db,
+					},
+					ExecFn: sm.ScanDevice,
+					Args:   jobId,
+				}
+
+				logging.Debug("Queueing job for sm (%v); nid: %v; mac: %s; ip: %s; status: %v;",
+					job.Descriptor.ID, subscriberModule.NetworkId, subscriberModule.MacAddress,
+					subscriberModule.IPv4Address, el.Status)
+
+				jobs = append(jobs, job)
+			}
+		}
+	}
 }
 
 func LoadJobs() {
@@ -161,6 +217,12 @@ func syncDatabase(db *sql.DB, appConfig types.AppConfig) bool {
 	success, db = database.CreateConnection("main", appConfig.DbConfig)
 
 	// Handle any exceptions that may have occurred when attempting to open the database connection
+	if success != true {
+		return false
+	}
+
+	success, subnets = dbSubnet.GetRecords(db)
+
 	if success != true {
 		return false
 	}

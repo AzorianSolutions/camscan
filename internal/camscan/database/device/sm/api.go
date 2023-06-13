@@ -56,6 +56,11 @@ func UpsertRecord(db *sql.DB, record device.SubscriberModule) (bool, device.Subs
 		record.IPv4Address,
 		record.IPv4AddressInt,
 		record.Status,
+		record.NetworkId,
+		record.MacAddress,
+		record.IPv4Address,
+		record.IPv4AddressInt,
+		record.Status,
 	)
 
 	if sqlError != nil {

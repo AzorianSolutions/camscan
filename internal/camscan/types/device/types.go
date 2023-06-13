@@ -5,7 +5,7 @@ type AccessPoint struct {
 	NetworkId      int
 	MacAddress     string
 	IPv4Address    string
-	IPv4AddressInt int
+	IPv4AddressInt uint32
 	Status         int
 }
 
@@ -14,6 +14,6 @@ type SubscriberModule struct {
 	NetworkId      int
 	MacAddress     string
 	IPv4Address    string
-	IPv4AddressInt int
+	IPv4AddressInt uint32
 	Status         int
 }
