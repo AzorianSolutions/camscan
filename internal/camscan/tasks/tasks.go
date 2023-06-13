@@ -8,7 +8,6 @@ import (
 	"as/camscan/internal/camscan/device/ap"
 	"as/camscan/internal/camscan/device/sm"
 	"as/camscan/internal/camscan/logging"
-	networkApi "as/camscan/internal/camscan/network"
 	"as/camscan/internal/camscan/types"
 	"as/camscan/internal/camscan/types/device"
 	"as/camscan/internal/camscan/types/network"
@@ -64,7 +63,7 @@ func SetupJobs() {
 
 	// Build jobs queue for device ICMP checks
 	jobId := 1
-	_, jobId, jobs = networkApi.BuildDeviceCheckJobs(db, appConfig, 1)
+	// _, jobId, jobs = networkApi.BuildDeviceCheckJobs(db, appConfig, 1)
 
 	// Load jobs queue with access points
 	for _, el := range accessPoints {
