@@ -64,69 +64,13 @@ func SetupJobs() {
 	// Synchronize changes from the database
 	syncDatabase(db, appConfig)
 
-	// Load jobs queue with access points
-	for _, el := range accessPoints {
-		if el.Status < 1 {
-			continue
-		}
-
-		jobId := len(jobs) + 1
-		metadata := make(map[string]interface{})
-		metadata["record"] = el
-
-		job := workers.Job{
-			Descriptor: workers.JobDescriptor{
-				ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
-				JType:     "ap",
-				AppConfig: appConfig,
-				Metadata:  metadata,
-				Db:        db,
-			},
-			ExecFn: ap.ScanDevice,
-			Args:   jobId,
-		}
-
-		logging.Debug("Queueing job for ap (%v); id: %v; nid: %v; mac: %s; ip: %s; status: %v;",
-			job.Descriptor.ID, el.Id, el.NetworkId, el.MacAddress, el.IPv4Address, el.Status)
-
-		jobs = append(jobs, job)
-	}
-
-	// Load jobs queue with subscriber modules
-	for _, el := range subscriberModules {
-		if el.Status < 1 {
-			continue
-		}
-
-		jobId := len(jobs) + 1
-		metadata := make(map[string]interface{})
-		metadata["record"] = el
-
-		job := workers.Job{
-			Descriptor: workers.JobDescriptor{
-				ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
-				JType:     "sm",
-				AppConfig: appConfig,
-				Metadata:  metadata,
-				Db:        db,
-			},
-			ExecFn: sm.ScanDevice,
-			Args:   jobId,
-		}
-
-		logging.Debug("Queueing job for sm (%v); id: %v; nid: %v; mac: %s; ip: %s; status: %v;",
-			job.Descriptor.ID, el.Id, el.NetworkId, el.MacAddress, el.IPv4Address, el.Status)
-
-		jobs = append(jobs, job)
-	}
+	jobId := 1
 
 	// Load jobs queue with subscriber modules based on network subnets
 	for _, el := range subnets {
 		if el.Status < 1 {
 			continue
 		}
-
-		jobId := len(jobs) + 1
 
 		_, networkIpv4, err := net.ParseCIDR(el.IPv4NetworkAddress + "/" + strconv.Itoa(el.IPv4NetworkMask))
 
@@ -166,8 +110,67 @@ func SetupJobs() {
 					subscriberModule.IPv4Address, el.Status)
 
 				jobs = append(jobs, job)
+				jobId++
 			}
 		}
+	}
+
+	// Load jobs queue with access points
+	for _, el := range accessPoints {
+		if el.Status < 1 {
+			continue
+		}
+
+		jobId := len(jobs) + 1
+		metadata := make(map[string]interface{})
+		metadata["record"] = el
+
+		job := workers.Job{
+			Descriptor: workers.JobDescriptor{
+				ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
+				JType:     "ap",
+				AppConfig: appConfig,
+				Metadata:  metadata,
+				Db:        db,
+			},
+			ExecFn: ap.ScanDevice,
+			Args:   jobId,
+		}
+
+		logging.Debug("Queueing job for ap (%v); id: %v; nid: %v; mac: %s; ip: %s; status: %v;",
+			job.Descriptor.ID, el.Id, el.NetworkId, el.MacAddress, el.IPv4Address, el.Status)
+
+		jobs = append(jobs, job)
+		jobId++
+	}
+
+	// Load jobs queue with subscriber modules
+	for _, el := range subscriberModules {
+		if el.Status < 1 {
+			continue
+		}
+
+		jobId := len(jobs) + 1
+		metadata := make(map[string]interface{})
+		metadata["record"] = el
+
+		job := workers.Job{
+			Descriptor: workers.JobDescriptor{
+				ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
+				JType:     "sm",
+				AppConfig: appConfig,
+				Metadata:  metadata,
+				Db:        db,
+			},
+			ExecFn: sm.ScanDevice,
+			Args:   jobId,
+		}
+
+		logging.Debug("Queueing job for sm (%v); id: %v; nid: %v; mac: %s; ip: %s; status: %v;",
+			job.Descriptor.ID, el.Id, el.NetworkId, el.MacAddress, el.IPv4Address, el.Status)
+
+		jobs = append(jobs, job)
+		jobId++
 	}
 }
 
