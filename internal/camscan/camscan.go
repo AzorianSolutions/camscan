@@ -8,8 +8,6 @@ import (
 	"flag"
 )
 
-const DbConnectionName = "main"
-
 var debug = false
 var dryRun = false
 var initialized = false

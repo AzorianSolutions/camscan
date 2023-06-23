@@ -15,15 +15,18 @@ import (
 	"as/camscan/internal/camscan/types/snmp"
 	"as/camscan/internal/camscan/workers"
 	"context"
+	"encoding/csv"
 	"fmt"
+	"os"
 )
 
-// Setup device maps
 var accessPointOidMaps []snmp.OidMap
 var accessPointOids map[string]string
+var accessPointResults []map[string]interface{}
 var accessPoints []device.AccessPoint
 var subscriberModuleOidMaps []snmp.OidMap
 var subscriberModuleOids map[string]string
+var subscriberModuleResults []map[string]interface{}
 var subscriberModules []device.SubscriberModule
 var subnets []network.Subnet
 
@@ -52,36 +55,24 @@ func ManageTasks() bool {
 
 		//logging.Debug("Task finished executing; id: %s;", r.Descriptor.ID)
 
-		results := r.Value.(map[string]interface{})
+		// Process the task result data
+		deviceResult := r.Value.(map[string]interface{})
 
+		// If the task was for an access point device
 		if r.Descriptor.JType == "ap" {
-			for _, om := range accessPointOidMaps {
-				result, ok := results[om.KeyName]
-				if !ok {
-					accessPointCSV += ","
-					continue
-				}
-				accessPointCSV += fmt.Sprintf("%v,", result)
-			}
-			accessPointCSV = accessPointCSV[:len(accessPointCSV)-1] + "\n"
+			accessPointResults = append(accessPointResults, deviceResult)
 		}
 
+		// If the task was for a subscriber module
 		if r.Descriptor.JType == "sm" {
-			for _, om := range subscriberModuleOidMaps {
-				result, ok := results[om.KeyName]
-				if !ok {
-					subscriberModuleCSV += ","
-					continue
-				}
-				subscriberModuleCSV += fmt.Sprintf("%v,", result)
-			}
-			subscriberModuleCSV = subscriberModuleCSV[:len(subscriberModuleCSV)-1] + "\n"
+			subscriberModuleResults = append(subscriberModuleResults, deviceResult)
 		}
 	case <-wp.Done:
 		// Handles the case where the worker pool has finished executing all tasks
 		//logging.Warning("Worker pool has finished executing all tasks.")
-		logging.Warning("Access Point CSV: %s;", accessPointCSV)
-		logging.Warning("Subscriber Module CSV: %s;", subscriberModuleCSV)
+		if !createCSVExport() {
+			logging.Error("Failed to create CSV exports.")
+		}
 		return false
 	default:
 		// Handles the case where the worker pool is still executing tasks
@@ -258,4 +249,109 @@ func syncDatabase() bool {
 	}
 
 	return true
+}
+
+func createCSVExport() bool {
+	// Setup CSV headers for each device type
+
+	// Access Point Headers
+	apHeader := make([]string, 0)
+	apRows := make([][]string, 0)
+	for _, om := range accessPointOidMaps {
+		apHeader = append(apHeader, om.KeyName)
+	}
+	apRows = append(apRows, apHeader)
+
+	// Subscriber Module Headers
+	smHeader := make([]string, 0)
+	smRows := make([][]string, 0)
+	for _, om := range subscriberModuleOidMaps {
+		smHeader = append(smHeader, om.KeyName)
+	}
+	smRows = append(smRows, smHeader)
+
+	// Process Access Point Results
+	for _, accessPointResult := range accessPointResults {
+		apRow := make([]string, 0)
+		for _, om := range accessPointOidMaps {
+			result, ok := accessPointResult[om.KeyName]
+			if !ok {
+				apRow = append(apRow, "")
+				continue
+			}
+			apRow = append(apRow, fmt.Sprintf("%v", result))
+		}
+		apRows = append(apRows, apRow)
+	}
+
+	// Process Subscriber Module Results
+	for _, subscriberModuleResult := range subscriberModuleResults {
+		smRow := make([]string, 0)
+		for _, om := range subscriberModuleOidMaps {
+			result, ok := subscriberModuleResult[om.KeyName]
+			if !ok {
+				smRow = append(smRow, "")
+				continue
+			}
+			smRow = append(smRow, fmt.Sprintf("%v", result))
+		}
+		smRows = append(smRows, smRow)
+	}
+
+	failed := false
+	apFilePath := "/tmp/ap.csv"
+	smFilePath := "/tmp/sm.csv"
+
+	apFile, err := os.Create(apFilePath)
+
+	if err != nil {
+		failed = true
+		logging.Error("Failed to create Access Point CSV file; path: %s; error: %s;", apFilePath, err.Error())
+	} else {
+		defer func(apFile *os.File) {
+			err := apFile.Close()
+			if err != nil {
+
+			}
+		}(apFile)
+	}
+
+	smFile, err := os.Create(smFilePath)
+
+	if err != nil {
+		failed = true
+		logging.Error("Failed to create Subscriber Module CSV file; path: %s; error: %s;",
+			smFilePath, err.Error())
+	} else {
+		defer func(smFile *os.File) {
+			err := smFile.Close()
+			if err != nil {
+
+			}
+		}(smFile)
+	}
+
+	apWriter := csv.NewWriter(apFile)
+	smWriter := csv.NewWriter(smFile)
+
+	for _, row := range apRows {
+		err := apWriter.Write(row)
+		if err != nil {
+			failed = true
+			logging.Error("Failed to write Access Point CSV row; error: %s;", err.Error())
+		}
+	}
+
+	for _, row := range smRows {
+		err := smWriter.Write(row)
+		if err != nil {
+			failed = true
+			logging.Error("Failed to write Subscriber Module CSV row; error: %s;", err.Error())
+		}
+	}
+
+	apWriter.Flush()
+	smWriter.Flush()
+
+	return !failed
 }

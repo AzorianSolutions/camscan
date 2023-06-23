@@ -75,16 +75,28 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 		if variable.Type == gosnmp.OctetString {
 			value := strings.Trim(string(variable.Value.([]byte)), " ")
 			results[key] = value
-
 			logging.Trace2("Loaded string value; ip: %s; oid: %s; value: %s;", record.IPv4Address, oid, value)
+
 		} else if variable.Type == gosnmp.Counter32 || variable.Type == gosnmp.Counter64 {
 			value := variable.Value
 			results[key] = value
-
 			logging.Trace2("Loaded counter value; ip: %s; oid: %s; value: %v;", record.IPv4Address, oid, value)
+
+		} else if variable.Type == gosnmp.Integer || variable.Type == gosnmp.Uinteger32 {
+			value := variable.Value
+			results[key] = value
+			logging.Trace2("Loaded integer value; ip: %s; oid: %s; value: %v;", record.IPv4Address, oid, value)
+
+		} else if variable.Type == gosnmp.TimeTicks {
+			value := variable.Value
+			// TODO: Convert to date/time string
+			results[key] = value
+			logging.Trace2("Loaded time tick value; ip: %s; oid: %s; value: %v;", record.IPv4Address, oid, value)
+
 		} else if variable.Type == gosnmp.Null {
 			logging.Trace1("Received SNMP value is nil for subscriber module; ip: %s; oid: %s;",
 				record.IPv4Address, oid)
+
 		} else {
 			logging.Error("SNMP Exception - Unexpected value type for oid; ip: %s; oid: %s; type: %s;",
 				record.IPv4Address, oid, variable.Type)
