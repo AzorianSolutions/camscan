@@ -24,3 +24,7 @@ type DbConfig struct {
 	ConnectRetries    int
 	ConnectRetryDelay int
 }
+
+type DbConnections struct {
+	CamScan string
+}

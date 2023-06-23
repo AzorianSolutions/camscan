@@ -1,28 +1,29 @@
 package tasks
 
 import (
+	"as/camscan/internal/camscan/config"
 	"as/camscan/internal/camscan/database"
 	dbAp "as/camscan/internal/camscan/database/device/ap"
 	dbSm "as/camscan/internal/camscan/database/device/sm"
 	dbSubnet "as/camscan/internal/camscan/database/network/subnet"
+	dbOm "as/camscan/internal/camscan/database/snmp/om"
 	"as/camscan/internal/camscan/device/ap"
 	"as/camscan/internal/camscan/device/sm"
 	"as/camscan/internal/camscan/logging"
-	"as/camscan/internal/camscan/types"
 	"as/camscan/internal/camscan/types/device"
 	"as/camscan/internal/camscan/types/network"
+	"as/camscan/internal/camscan/types/snmp"
 	"as/camscan/internal/camscan/workers"
 	"context"
-	"database/sql"
 	"fmt"
-	"strconv"
 )
 
-var appConfig types.AppConfig
-var db *sql.DB
-
 // Setup device maps
+var accessPointOidMaps []snmp.OidMap
+var accessPointOids map[string]string
 var accessPoints []device.AccessPoint
+var subscriberModuleOidMaps []snmp.OidMap
+var subscriberModuleOids map[string]string
 var subscriberModules []device.SubscriberModule
 var subnets []network.Subnet
 
@@ -31,21 +32,87 @@ var jobs = make([]workers.Job, 0)
 var ctx context.Context
 var wp workers.WorkerPool
 
-func SetAppConfig(config types.AppConfig) {
-	appConfig = config
+var accessPointCSV = ""
+var subscriberModuleCSV = ""
+
+func ManageTasks() bool {
+	select {
+	case <-ctx.Done():
+		// Handles the case where the context is canceled before the first task is executed
+		//logging.Error("Context canceled before the first task was executed; error: %s;", ctx.Err().Error())
+	case r, ok := <-wp.Results():
+		// Handles the case where a task has finished executing
+		if !ok {
+			break
+		}
+
+		if r.Err != nil {
+			logging.Error("Task failed to execute; id: %s; error: %s;", r.Descriptor.ID, r.Err.Error())
+		}
+
+		//logging.Debug("Task finished executing; id: %s;", r.Descriptor.ID)
+
+		results := r.Value.(map[string]interface{})
+
+		if r.Descriptor.JType == "ap" {
+			for _, om := range accessPointOidMaps {
+				result, ok := results[om.KeyName]
+				if !ok {
+					accessPointCSV += ","
+					continue
+				}
+				accessPointCSV += fmt.Sprintf("%v,", result)
+			}
+			accessPointCSV = accessPointCSV[:len(accessPointCSV)-1] + "\n"
+		}
+
+		if r.Descriptor.JType == "sm" {
+			for _, om := range subscriberModuleOidMaps {
+				result, ok := results[om.KeyName]
+				if !ok {
+					subscriberModuleCSV += ","
+					continue
+				}
+				subscriberModuleCSV += fmt.Sprintf("%v,", result)
+			}
+			subscriberModuleCSV = subscriberModuleCSV[:len(subscriberModuleCSV)-1] + "\n"
+		}
+	case <-wp.Done:
+		// Handles the case where the worker pool has finished executing all tasks
+		//logging.Warning("Worker pool has finished executing all tasks.")
+		logging.Warning("Access Point CSV: %s;", accessPointCSV)
+		logging.Warning("Subscriber Module CSV: %s;", subscriberModuleCSV)
+		return false
+	default:
+		// Handles the case where the worker pool is still executing tasks
+		//logging.Debug("Worker pool is still executing tasks.")
+	}
+
+	return true
 }
 
-func SetDb(connection *sql.DB) {
-	db = connection
+func SetupTaskManager() bool {
+	SetupWorkerPool()
+
+	// Creates jobs in the queue
+	SetupJobs()
+
+	// Loads the job queue into the worker pool
+	LoadJobs()
+
+	// Signals the worker pool to begin execution of the job queue
+	StartJobs()
+
+	return true
 }
 
 func SetupWorkerPool() context.CancelFunc {
-	logging.Debug("Setting up new worker pool with %v workers.", appConfig.Workers)
+	logging.Debug("Setting up new worker pool with %v workers.", config.AppConfig.Workers)
 
 	var cancel context.CancelFunc
 
 	// Create worker pool
-	wp = workers.New(appConfig.Workers)
+	wp = workers.New(config.AppConfig.Workers)
 
 	ctx, cancel = context.WithCancel(context.TODO())
 
@@ -59,13 +126,40 @@ func SetupJobs() {
 	logging.Debug("Loading existing inventory records from database...")
 
 	// Synchronize changes from the database
-	syncDatabase(db, appConfig)
+	syncDatabase()
+
+	db := database.GetConnection(database.ConnectionMap.CamScan)
 
 	// dbSubnet.PopulateSubnets(db)
 
 	// Build jobs queue for device ICMP checks
 	jobId := 1
 	// _, jobId, jobs = networkApi.BuildDeviceCheckJobs(db, appConfig, 1)
+
+	_, accessPointOidMaps = dbOm.GetRecords(db, snmp.DeviceTypeAccessPoint)
+	_, subscriberModuleOidMaps = dbOm.GetRecords(db, snmp.DeviceTypeSubscriberModule)
+
+	accessPointOids = make(map[string]string)
+	subscriberModuleOids = make(map[string]string)
+
+	for _, el := range accessPointOidMaps {
+		accessPointOids[el.KeyName] = el.Oid
+	}
+
+	for _, el := range subscriberModuleOidMaps {
+		subscriberModuleOids[el.KeyName] = el.Oid
+	}
+
+	for key, _ := range accessPointOids {
+		accessPointCSV += key + ","
+	}
+
+	for key, _ := range subscriberModuleOids {
+		subscriberModuleCSV += key + ","
+	}
+
+	accessPointCSV = accessPointCSV[:len(accessPointCSV)-1] + "\n"
+	subscriberModuleCSV = subscriberModuleCSV[:len(subscriberModuleCSV)-1] + "\n"
 
 	// Load jobs queue with access points
 	for _, el := range accessPoints {
@@ -75,12 +169,13 @@ func SetupJobs() {
 
 		metadata := make(map[string]interface{})
 		metadata["record"] = el
+		metadata["oids"] = accessPointOids
 
 		job := workers.Job{
 			Descriptor: workers.JobDescriptor{
 				ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
 				JType:     "ap",
-				AppConfig: appConfig,
+				AppConfig: config.AppConfig,
 				Metadata:  metadata,
 				Db:        db,
 			},
@@ -103,12 +198,13 @@ func SetupJobs() {
 
 		metadata := make(map[string]interface{})
 		metadata["record"] = el
+		metadata["oids"] = subscriberModuleOids
 
 		job := workers.Job{
 			Descriptor: workers.JobDescriptor{
 				ID:        workers.JobID(fmt.Sprintf("%v", jobId)),
 				JType:     "sm",
-				AppConfig: appConfig,
+				AppConfig: config.AppConfig,
 				Metadata:  metadata,
 				Db:        db,
 			},
@@ -130,44 +226,13 @@ func LoadJobs() {
 }
 
 func StartJobs() {
-	logging.Debug("Starting %v workers to process SNMP queries.", appConfig.Workers)
+	logging.Debug("Starting %v workers to process SNMP queries.", config.AppConfig.Workers)
 	go wp.Run(ctx)
 }
 
-func MonitorJobs() {
-	for {
-		stop := false
-		select {
-		case r, ok := <-wp.Results():
-			if !ok {
-				continue
-			}
-
-			i, err := strconv.ParseInt(string(r.Descriptor.ID), 10, 64)
-			if err != nil {
-				logging.Error("unexpected error: %v", err)
-			}
-
-			val := r.Value.(int)
-			if val != int(i)*2 {
-				logging.Error("wrong value %v; expected %v", val, int(i)*2)
-			}
-		case <-wp.Done:
-			stop = true
-		default:
-		}
-
-		if stop == true {
-			break
-		}
-	}
-}
-
-func syncDatabase(db *sql.DB, appConfig types.AppConfig) bool {
-	var success = false
-
+func syncDatabase() bool {
 	// Open a fresh database connection to ensure a smooth execution
-	success, db = database.CreateConnection("main", appConfig.DbConfig)
+	success, db := database.CreateConnection(database.ConnectionMap.CamScan, config.AppConfig.DbConfig)
 
 	// Handle any exceptions that may have occurred when attempting to open the database connection
 	if success != true {

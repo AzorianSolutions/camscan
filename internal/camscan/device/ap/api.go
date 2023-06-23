@@ -11,16 +11,9 @@ import (
 	"time"
 )
 
-const FirmwareModeOid = "1.3.6.1.2.1.1.1.0"
-const MacAddressOid = "1.3.6.1.4.1.161.19.3.3.1.3.0"
-const SNMPSiteNameOid = "1.3.6.1.2.1.1.5.0"
-const SNMPSiteLocationOid = "1.3.6.1.2.1.1.6.0"
-const SNMPSiteContactOid = "1.3.6.1.2.1.1.4.0"
-
 func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDescriptor) (interface{}, error) {
 	var record = descriptor.Metadata["record"].(device.AccessPoint)
-	argVal := args.(int)
-	returnVal := argVal * 2
+	results := make(map[string]interface{})
 	timeout := time.Duration(1000000000 * descriptor.AppConfig.SnmpTimeoutSm)
 
 	logging.Trace("Opening SNMP connection for access point; "+
@@ -40,7 +33,7 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 
 	if snmpError != nil {
 		logging.Warning("Failed to open SNMP connection for access point; ip: %s;", record.IPv4Address)
-		return returnVal, nil
+		return results, nil
 	}
 
 	defer func(Conn net.Conn) {
@@ -50,7 +43,13 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 		}
 	}(snmp.Conn)
 
-	oids := []string{FirmwareModeOid, MacAddressOid, SNMPSiteNameOid, SNMPSiteLocationOid, SNMPSiteContactOid}
+	oids := make([]string, 0)
+	oidMap := make(map[string]string)
+
+	for key, oid := range descriptor.Metadata["oids"].(map[string]string) {
+		oids = append(oids, oid)
+		oidMap[oid] = key
+	}
 
 	logging.Trace1("Querying SNMP service for access point; ip: %s;", record.IPv4Address)
 
@@ -58,46 +57,31 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 
 	if snmpError != nil {
 		logging.Warning("Failed to query SNMP service for access point; ip: %s;", record.IPv4Address)
-		return returnVal, nil
+		return results, nil
 	}
 
 	for _, variable := range snmpResult.Variables {
 		// Cache a reference to the OID without the leading "."
 		oid := variable.Name[1:]
 
+		key, ok := oidMap[oid]
+
+		if !ok {
+			logging.Warning("Failed to find OID key in map; ip: %s; oid: %s;", record.IPv4Address, oid)
+			continue
+		}
+
 		// Process OID value based on type
 		if variable.Type == gosnmp.OctetString {
 			value := strings.Trim(string(variable.Value.([]byte)), " ")
+			results[key] = value
 
-			// Firmware Version & Mode
-			if oid == FirmwareModeOid {
-				logging.Trace2("Loaded firmware mode; ip: %s; value: %s;",
-					record.IPv4Address, value)
-			}
+			logging.Trace2("Loaded string value; ip: %s; oid: %s; value: %s;", record.IPv4Address, oid, value)
+		} else if variable.Type == gosnmp.Counter32 || variable.Type == gosnmp.Counter64 {
+			value := variable.Value
+			results[key] = value
 
-			// Primary MAC Address
-			if oid == MacAddressOid {
-				logging.Trace2("Loaded primary MAC address; ip: %s; value: %s;",
-					record.IPv4Address, value)
-			}
-
-			// SNMP Site Name
-			if oid == SNMPSiteNameOid {
-				logging.Trace2("Loaded site name; ip: %s; value: %s;",
-					record.IPv4Address, value)
-			}
-
-			// SNMP Site Location
-			if oid == SNMPSiteLocationOid {
-				logging.Trace2("Loaded site location; ip: %s; value: %s;",
-					record.IPv4Address, value)
-			}
-
-			// SNMP Site Contact
-			if oid == SNMPSiteContactOid {
-				logging.Trace2("Loaded site contact; ip: %s; value: %s;",
-					record.IPv4Address, value)
-			}
+			logging.Trace2("Loaded counter value; ip: %s; oid: %s; value: %v;", record.IPv4Address, oid, value)
 		} else if variable.Type == gosnmp.Null {
 			logging.Trace1("Received SNMP value is nil for access point; ip: %s; oid: %s;",
 				record.IPv4Address, oid)
@@ -108,5 +92,5 @@ func ScanDevice(ctx context.Context, args interface{}, descriptor workers.JobDes
 		}
 	}
 
-	return returnVal, nil
+	return results, nil
 }

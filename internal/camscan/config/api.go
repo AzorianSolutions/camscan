@@ -13,7 +13,9 @@ const DefaultWorkers = 10
 const MinSnmpTimeout = 0.1
 const MinWorkers = 1
 
-func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bool) types.AppConfig {
+var AppConfig types.AppConfig
+
+func CreateAppConfig(workers int, dryRun bool, debug bool) types.AppConfig {
 	community := strings.Trim(os.Getenv("CAMS_COMMUNITY"), " ")
 	debugEnv := strings.Trim(os.Getenv("CAMS_DEBUG"), " ")
 	dryRunEnv := strings.Trim(os.Getenv("CAMS_DRY_RUN"), " ")
@@ -72,7 +74,6 @@ func CreateAppConfig(dbConfig types.DbConfig, workers int, dryRun bool, debug bo
 
 	config := types.AppConfig{
 		Community:       community,
-		DbConfig:        dbConfig,
 		Debug:           debug,
 		DryRun:          dryRun,
 		ICMPRetries:     icmpRetries,

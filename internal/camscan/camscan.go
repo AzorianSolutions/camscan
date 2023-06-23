@@ -6,17 +6,32 @@ import (
 	"as/camscan/internal/camscan/logging"
 	"as/camscan/internal/camscan/tasks"
 	"flag"
-	"fmt"
-	"os"
 )
 
 const DbConnectionName = "main"
 
-func main() {
-	debug := false
-	dryRun := false
-	workers := 0
+var debug = false
+var dryRun = false
+var initialized = false
+var workers = 0
 
+func main() {
+	// Initialize program on first cycle execution
+	if initialized == false {
+		logging.Info("Initializing CamScan...")
+		initialize()
+	}
+
+	for {
+		// Execute management process for task manager
+		if !tasks.ManageTasks() {
+			logging.Info("CamScan has finished executing.")
+			break
+		}
+	}
+}
+
+func initialize() {
 	// Define application arguments and allow for override of database environment settings
 	flag.BoolVar(&debug, "debug", debug, "Determines whether debug mode is enabled.")
 	flag.BoolVar(&dryRun, "dry-run", dryRun, "Determines whether dry-run mode is enabled.")
@@ -24,46 +39,15 @@ func main() {
 	flag.Parse()
 
 	// Load application settings from environment into structured configuration
-	appConfig := config.CreateAppConfig(database.CreateConfigFromEnvironment(), workers, dryRun, debug)
+	appConfig := config.CreateAppConfig(workers, dryRun, debug)
+	appConfig.DbConfig = database.CreateConfigFromEnvironment()
+	config.AppConfig = appConfig
 
 	// Configure the logging API
 	logging.SetLogLevel(appConfig.LogLevel)
 
-	fmt.Printf("Log Level: %v;", logging.GetLogLevel())
+	// Set up the task manager
+	tasks.SetupTaskManager()
 
-	logging.Info("Starting the CamScan main process...")
-
-	// Open a fresh database connection to ensure a smooth execution
-	opened, db := database.OpenConnection(DbConnectionName, appConfig.DbConfig)
-
-	if opened == false {
-		logging.Critical("Could not open a connection to the database server!")
-		os.Exit(1)
-	}
-
-	// Set up the task management system
-	tasks.SetAppConfig(appConfig)
-	tasks.SetDb(db)
-
-	cancel := tasks.SetupWorkerPool()
-	defer cancel()
-
-	// Creates jobs in the queue
-	tasks.SetupJobs()
-
-	// Loads the job queue into the worker pool
-	tasks.LoadJobs()
-
-	// Signals the worker pool to begin execution of the job queue
-	tasks.StartJobs()
-
-	// Wait for all jobs to be completed while monitoring the workers for communications
-	tasks.MonitorJobs()
-
-	// Close & remove the database connection
-	if database.CloseConnection(DbConnectionName) == true {
-		database.RemoveConnection(DbConnectionName)
-	}
-
-	logging.Info("CamScan has completed the execution cycle.")
+	initialized = true
 }

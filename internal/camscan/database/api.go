@@ -15,6 +15,9 @@ var configs = make(map[string]types.DbConfig)
 var connections = make(map[string]*sql.DB)
 var db *sql.DB = nil
 var dbConnectionString string
+var ConnectionMap = types.DbConnections{
+	CamScan: "main",
+}
 
 func CreateConfig(host string, port string, user string, password string, name string, retries int, delay int) types.DbConfig {
 	var config = GetDefaultConfig()
